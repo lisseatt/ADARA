@@ -1,0 +1,6 @@
+{
+  "name": "AromaBotánica - Registro de Ventas & Google Sheets",
+  "description": "Sistema de registro y control de ventas para cosmética artesanal con carrito dinámico, historial con filtros mensuales y sincronización con Google Sheets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
