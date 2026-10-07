@@ -2,17 +2,14 @@ import React, { useState } from 'react';
 import { 
   Copy, 
   Check, 
-  ExternalLink, 
   FileSpreadsheet, 
   CheckCircle, 
   AlertCircle, 
   Download, 
-  Sparkles, 
-  HelpCircle,
-  Play,
-  Terminal,
-  RefreshCw,
-  Table
+  Play, 
+  Terminal, 
+  RefreshCw, 
+  Table 
 } from 'lucide-react';
 import { GOOGLE_APPS_SCRIPT_CODE } from '../data/appsScriptCode';
 import { testGasConnection, saveScriptUrl } from '../services/sheetsService';
@@ -37,7 +34,6 @@ export const GoogleSheetsGuide: React.FC<GoogleSheetsGuideProps> = ({
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
-      // Fallback
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     }
@@ -64,7 +60,7 @@ export const GoogleSheetsGuide: React.FC<GoogleSheetsGuideProps> = ({
     if (!cleanUrl) {
       setTestResult({
         success: false,
-        message: 'Has limpiado la URL. La aplicación guardará las ventas en almacenamiento local.'
+        message: 'Has borrado el enlace. La app guardará las ventas únicamente en la memoria de este dispositivo.'
       });
       return;
     }
@@ -78,63 +74,70 @@ export const GoogleSheetsGuide: React.FC<GoogleSheetsGuideProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      {/* TARJETA DE CONEXIÓN RÁPIDA DE LA URL */}
-      <div className="bg-white rounded-2xl border border-[#E8E2D8] p-6 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 mb-4 border-b border-[#F0EBE1]">
+    <div className="space-y-6 min-w-[300px]">
+      {/* TARJETA DE CONEXIÓN */}
+      <div className="bg-white rounded-2xl border-2 border-[#C4B5A5] p-5 sm:p-7 shadow-sm space-y-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b-2 border-[#E8DFC8]">
           <div>
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#D49A2A]">
-              <FileSpreadsheet className="w-4 h-4" />
+            <div className="flex items-center gap-2 text-base font-bold uppercase tracking-wider text-[#B8801A]">
+              <FileSpreadsheet className="w-5 h-5" />
               <span>Conexión con tu Hoja de Cálculo</span>
             </div>
-            <h2 className="text-xl font-serif-title font-semibold text-[#2D2721] mt-0.5">
-              URL de la Aplicación Web de Google Apps Script
+            <h2 className="text-2xl font-bold text-[#1A1612] mt-1">
+              Enlace de Google Sheets
             </h2>
-            <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-              Pega aquí la URL que obtienes al implementar el script en Google Sheets. Las ventas se sincronizarán en tiempo real.
+            <p className="text-base font-medium text-[#4A3D30] mt-1 max-w-2xl">
+              Pega aquí el enlace que obtuviste al publicar el script en Google Sheets. Tus ventas se guardarán automáticamente.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div>
             <span
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full ${
+              className={`inline-flex items-center gap-2 px-3.5 py-2 text-base font-bold rounded-xl border-2 ${
                 currentUrl
-                  ? 'bg-[#FAF5EC] text-[#9E6C12] border border-[#ECD9BA]'
-                  : 'bg-amber-50 text-amber-800 border border-amber-200'
+                  ? 'bg-[#FAF5EC] text-[#1A1612] border-[#B8801A]'
+                  : 'bg-amber-100 text-[#1A1612] border-amber-500'
               }`}
             >
-              <span className={`w-2 h-2 rounded-full ${currentUrl ? 'bg-[#D49A2A]' : 'bg-amber-500'}`}></span>
-              <span>{currentUrl ? 'URL Configurada' : 'Modo Almacenamiento Local'}</span>
+              <span className={`w-3 h-3 rounded-full ${currentUrl ? 'bg-[#15803D]' : 'bg-amber-600'}`}></span>
+              <span>{currentUrl ? 'Hoja Vinculada' : 'Modo Solo Local'}</span>
             </span>
           </div>
         </div>
 
         <form onSubmit={handleSaveAndTest} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
-              URL del Web App (termina en /exec)
+            {/* Etiqueta visible obligatoria */}
+            <label 
+              htmlFor="url-sheets-input"
+              className="block text-base font-bold text-[#1A1612] mb-1.5"
+            >
+              Enlace web de tu hoja de cálculo (debe terminar en /exec):
             </label>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col sm:flex-row gap-3">
               <input
+                id="url-sheets-input"
                 type="url"
                 value={inputUrl}
                 onChange={e => setInputUrl(e.target.value)}
-                placeholder="https://script.google.com/macros/s/AKfycbx.../exec"
-                className="flex-1 px-4 py-2.5 bg-[#FAF7F2] border border-[#D8CFC4] rounded-xl text-sm font-mono text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#D49A2A]"
+                placeholder="https://script.google.com/macros/s/.../exec"
+                className="flex-1 min-h-[48px] px-4 py-2.5 bg-white border-2 border-[#6B5A4B] rounded-xl text-base font-mono font-bold text-[#1A1612] focus:outline-none focus:border-[#D49A2A]"
               />
+
+              {/* ÚNICO BOTÓN PRINCIPAL DE ESTA PANTALLA (Requisito 4) */}
               <button
                 type="submit"
                 disabled={isTesting}
-                className="px-5 py-2.5 bg-[#D49A2A] hover:bg-[#BD851D] active:bg-[#A57416] text-white font-semibold text-xs uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:bg-slate-300 shrink-0"
+                className="min-h-[48px] px-6 py-3 bg-[#B8801A] hover:bg-[#9E6C12] active:bg-[#855B0F] text-white font-bold text-base rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:bg-slate-300 shrink-0 shadow-md"
               >
                 {isTesting ? (
                   <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Verificando...</span>
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    <span>Verificando conexión...</span>
                   </>
                 ) : (
                   <>
-                    <Play className="w-3.5 h-3.5" />
+                    <Play className="w-5 h-5" />
                     <span>Guardar y Probar Conexión</span>
                   </>
                 )}
@@ -142,24 +145,26 @@ export const GoogleSheetsGuide: React.FC<GoogleSheetsGuideProps> = ({
             </div>
           </div>
 
+          {/* Resultado de prueba visible y en español claro */}
           {testResult && (
             <div
-              className={`p-4 rounded-xl text-xs font-medium flex items-start gap-3 animate-in fade-in ${
+              role="alert"
+              className={`p-4 rounded-xl text-base font-bold flex items-start gap-3 border-2 animate-in fade-in ${
                 testResult.success
-                  ? 'bg-[#FAF5EC] border border-[#ECD9BA] text-[#7A5007]'
-                  : 'bg-amber-50 border border-amber-200 text-amber-900'
+                  ? 'bg-[#FAF5EC] border-[#B8801A] text-[#1A1612]'
+                  : 'bg-amber-100 border-amber-600 text-[#1A1612]'
               }`}
             >
               {testResult.success ? (
-                <CheckCircle className="w-5 h-5 text-[#D49A2A] shrink-0 mt-0.5" />
+                <CheckCircle className="w-6 h-6 text-[#15803D] shrink-0 mt-0.5" />
               ) : (
-                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <AlertCircle className="w-6 h-6 text-amber-700 shrink-0 mt-0.5" />
               )}
               <div className="space-y-1">
-                <p className="font-semibold">{testResult.message}</p>
+                <p className="leading-snug">{testResult.message}</p>
                 {testResult.sheetName && (
-                  <p className="text-[11px] text-[#9E6C12]">
-                    Pestaña vinculada: <strong className="font-mono">{testResult.sheetName}</strong>
+                  <p className="text-base text-[#4A3D30]">
+                    Pestaña vinculada: <strong className="font-mono text-[#1A1612]">{testResult.sheetName}</strong>
                   </p>
                 )}
               </div>
@@ -168,148 +173,134 @@ export const GoogleSheetsGuide: React.FC<GoogleSheetsGuideProps> = ({
         </form>
       </div>
 
-      {/* GUÍA PASO A PASO EN 4 PASOS */}
-      <div className="bg-white rounded-2xl border border-[#E8E2D8] p-6 shadow-sm space-y-6">
+      {/* GUÍA DE 4 PASOS */}
+      <div className="bg-white rounded-2xl border-2 border-[#C4B5A5] p-5 sm:p-7 shadow-sm space-y-6">
         <div>
-          <h3 className="text-lg font-serif-title font-semibold text-[#2D2721]">
-            Guía de Implementación en Google Sheets (4 Pasos Sencillos)
+          <h3 className="text-2xl font-bold text-[#1A1612]">
+            Instrucciones para conectar tu hoja (4 Pasos)
           </h3>
-          <p className="text-xs text-slate-500 mt-1">
-            Solo toma 2 minutos configurar tu hoja para recibir los pedidos de cosmética artesanal automáticamente.
+          <p className="text-base font-medium text-[#4A3D30] mt-1">
+            Solo toma un par de minutos conectar tu hoja para recibir las ventas de Adara.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Paso 1 */}
-          <div className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E8E2D8] space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-[#D49A2A] text-white flex items-center justify-center font-bold text-xs">
+          <div className="p-4 rounded-2xl bg-[#FAF7F2] border-2 border-[#E8DFC8] space-y-2">
+            <div className="flex items-center gap-3">
+              <span className="w-8 h-8 rounded-full bg-[#1A1612] text-white flex items-center justify-center font-bold text-base">
                 1
               </span>
-              <h4 className="text-sm font-semibold text-slate-900">
-                Abre tu Google Sheets existente
+              <h4 className="text-lg font-bold text-[#1A1612]">
+                Abre tu hoja de Google Sheets
               </h4>
             </div>
-            <p className="text-xs text-slate-600">
-              Ingresa a tu hoja de cálculo en <a href="https://sheets.google.com" target="_blank" rel="noreferrer" className="text-[#D49A2A] underline font-medium">sheets.google.com</a>. No necesitas crear los encabezados manualmente, el script los creará automáticamente si la hoja está vacía.
+            <p className="text-base text-[#4A3D30] font-medium leading-relaxed">
+              Ingresa a Google Sheets y crea una hoja nueva o usa una existente. No tienes que escribir los títulos de columnas; el sistema los creará automáticamente.
             </p>
           </div>
 
           {/* Paso 2 */}
-          <div className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E8E2D8] space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-[#D49A2A] text-white flex items-center justify-center font-bold text-xs">
+          <div className="p-4 rounded-2xl bg-[#FAF7F2] border-2 border-[#E8DFC8] space-y-2">
+            <div className="flex items-center gap-3">
+              <span className="w-8 h-8 rounded-full bg-[#1A1612] text-white flex items-center justify-center font-bold text-base">
                 2
               </span>
-              <h4 className="text-sm font-semibold text-slate-900">
-                Abre Extensiones &gt; Apps Script
+              <h4 className="text-lg font-bold text-[#1A1612]">
+                Entra a Extensiones &gt; Apps Script
               </h4>
             </div>
-            <p className="text-xs text-slate-600">
-              En el menú superior de Google Sheets, ve a <strong>Extensiones</strong> y haz clic en <strong>Apps Script</strong>. Se abrirá la ventana del editor de código de Google.
+            <p className="text-base text-[#4A3D30] font-medium leading-relaxed">
+              En el menú superior de Google Sheets, haz clic en <strong>Extensiones</strong> y luego en <strong>Apps Script</strong>. Se abrirá la ventana para pegar código.
             </p>
           </div>
 
           {/* Paso 3 */}
-          <div className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E8E2D8] space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-[#D49A2A] text-white flex items-center justify-center font-bold text-xs">
+          <div className="p-4 rounded-2xl bg-[#FAF7F2] border-2 border-[#E8DFC8] space-y-2">
+            <div className="flex items-center gap-3">
+              <span className="w-8 h-8 rounded-full bg-[#1A1612] text-white flex items-center justify-center font-bold text-base">
                 3
               </span>
-              <h4 className="text-sm font-semibold text-slate-900">
-                Pega el Código.gs y Guarda
+              <h4 className="text-lg font-bold text-[#1A1612]">
+                Pega el código y dale Guardar
               </h4>
             </div>
-            <p className="text-xs text-slate-600">
-              Borra cualquier texto existente en el editor, copia el código que aparece más abajo con el botón <strong>"Copiar Código"</strong>, pégalo y haz clic en el icono de <strong>Guardar (💾)</strong>.
+            <p className="text-base text-[#4A3D30] font-medium leading-relaxed">
+              Borra lo que esté escrito, copia el código con el botón de abajo <strong>"Copiar Código"</strong>, pégalo en la ventana y haz clic en el botón de guardar.
             </p>
           </div>
 
           {/* Paso 4 */}
-          <div className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E8E2D8] space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-[#D49A2A] text-white flex items-center justify-center font-bold text-xs">
+          <div className="p-4 rounded-2xl bg-[#FAF7F2] border-2 border-[#E8DFC8] space-y-2">
+            <div className="flex items-center gap-3">
+              <span className="w-8 h-8 rounded-full bg-[#1A1612] text-white flex items-center justify-center font-bold text-base">
                 4
               </span>
-              <h4 className="text-sm font-semibold text-slate-900">
-                Implementar como Aplicación Web
+              <h4 className="text-lg font-bold text-[#1A1612]">
+                Publica tu aplicación web
               </h4>
             </div>
-            <p className="text-xs text-slate-600">
-              Haz clic en el botón azul superior <strong>Implementar &gt; Nueva implementación</strong>. Selecciona tipo <strong>"Aplicación web"</strong>, en "¿Quién tiene acceso?" elige <strong>"Cualquiera" (Anyone)</strong>, haz clic en Implementar y copia la URL generada.
+            <p className="text-base text-[#4A3D30] font-medium leading-relaxed">
+              Haz clic en <strong>Implementar &gt; Nueva implementación</strong>, selecciona tipo <strong>Aplicación web</strong>, en acceso elige <strong>Cualquiera</strong> y copia el enlace que te entregue.
             </p>
           </div>
         </div>
 
-        {/* ESTRUCTURA EXACTA DE COLUMNAS EXPLICADA */}
-        <div className="p-4 rounded-xl bg-[#FAF5EC] border border-[#ECD9BA]">
-          <div className="flex items-center gap-2 text-[#7A5007] font-semibold text-xs uppercase tracking-wider mb-2">
-            <Table className="w-4 h-4 text-[#D49A2A]" />
-            <span>Columnas estrictas creadas en la Fila 1 de Google Sheets:</span>
+        {/* Columnas */}
+        <div className="p-5 rounded-2xl bg-[#FAF5EC] border-2 border-[#B8801A] space-y-3">
+          <div className="flex items-center gap-2 text-[#1A1612] font-bold text-base uppercase">
+            <Table className="w-5 h-5 text-[#B8801A]" />
+            <span>Columnas que se guardarán en tu hoja de cálculo:</span>
           </div>
-          <div className="grid grid-cols-3 sm:grid-cols-9 gap-1.5 text-center text-xs font-mono">
-            {[
-              'Numero_Pedido',
-              'Fecha',
-              'Cliente',
-              'Direccion',
-              'Producto',
-              'Tamaño',
-              'Cantidad',
-              'Precio_Unitario',
-              'Subtotal'
-            ].map((col, i) => (
-              <div key={i} className="bg-white border border-[#ECD9BA] rounded py-1.5 px-1 font-semibold text-[#7A5007] truncate" title={col}>
-                {col}
-              </div>
-            ))}
+          <div className="text-base font-bold text-[#1A1612] leading-relaxed">
+            Numero_Pedido · Fecha · Cliente · Direccion · Producto · Tamaño · Cantidad · Precio_Unitario · Subtotal
           </div>
-          <p className="text-[11px] text-[#8C5D0D] mt-2">
-            <strong>Garantía de integridad:</strong> Si un pedido contiene 3 productos diferentes, el script agregará 3 renglones consecutivos en Google Sheets compartiendo exactamente el mismo <strong>Numero_Pedido</strong>, <strong>Fecha</strong>, <strong>Cliente</strong> y <strong>Dirección</strong>.
-          </p>
         </div>
       </div>
 
-      {/* BLOQUE DE CÓDIGO GOOGLE APPS SCRIPT COMPLETO */}
-      <div className="bg-[#1F1C18] text-slate-100 rounded-2xl border border-[#38312A] shadow-md overflow-hidden">
-        <div className="p-4 bg-[#181512] border-b border-[#38312A] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* BLOQUE DE CÓDIGO (Botones secundarios) */}
+      <div className="bg-[#1A1612] text-white rounded-2xl border-2 border-[#6B5A4B] shadow-md overflow-hidden">
+        <div className="p-4 bg-[#2D241E] border-b-2 border-[#6B5A4B] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Terminal className="w-4 h-4 text-[#F3CA7E]" />
-            <span className="text-xs font-mono font-semibold text-[#F3CA7E]">
-              Código.gs (Google Apps Script)
+            <Terminal className="w-5 h-5 text-[#F5C242]" />
+            <span className="text-base font-bold text-white">
+              Código para tu hoja de cálculo (Codigo.gs)
             </span>
-            <span className="text-xs text-slate-400">· Listo para copiar</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Botón secundario */}
             <button
+              type="button"
               onClick={handleDownloadFile}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+              className="min-h-[44px] px-3.5 py-2 text-base font-bold text-white bg-[#3D332B] hover:bg-[#4D4137] border border-[#6B5A4B] rounded-xl transition-colors cursor-pointer inline-flex items-center gap-2"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Descargar .gs</span>
+              <Download className="w-4 h-4" />
+              <span>Descargar archivo</span>
             </button>
 
+            {/* Botón secundario */}
             <button
+              type="button"
               onClick={handleCopyCode}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-[#D49A2A] hover:bg-[#BD851D] active:bg-[#A57416] rounded-lg transition-colors cursor-pointer shadow-sm"
+              className="min-h-[44px] px-4 py-2 text-base font-bold text-[#1A1612] bg-[#FAF5EC] hover:bg-white border-2 border-[#D49A2A] rounded-xl transition-colors cursor-pointer inline-flex items-center gap-2"
             >
               {copied ? (
                 <>
-                  <Check className="w-3.5 h-3.5 text-white" />
+                  <Check className="w-4 h-4 text-[#15803D]" />
                   <span>¡Código Copiado!</span>
                 </>
               ) : (
                 <>
-                  <Copy className="w-3.5 h-3.5 text-white" />
-                  <span>Copiar Código Completo</span>
+                  <Copy className="w-4 h-4 text-[#B8801A]" />
+                  <span>Copiar Código</span>
                 </>
               )}
             </button>
           </div>
         </div>
 
-        <div className="p-4 overflow-x-auto max-h-[500px] text-xs font-mono leading-relaxed bg-[#1F1C18] text-slate-300">
+        <div className="p-5 overflow-x-auto max-h-[400px] text-base font-mono leading-relaxed bg-[#1A1612] text-[#F5EFE6]">
           <pre className="whitespace-pre">{GOOGLE_APPS_SCRIPT_CODE}</pre>
         </div>
       </div>

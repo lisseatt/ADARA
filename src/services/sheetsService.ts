@@ -39,13 +39,65 @@ export function saveOrdersLocally(orders: SaleOrder[]): void {
 
 /**
  * Obtiene el próximo número secuencial de pedido (1, 2, 3...)
- * Busca el mayor Numero_Pedido existente y suma 1.
+ * Busca el mayor Numero_Pedido existente en memoria/local y suma 1.
  */
-export function getNextOrderNumber(): number {
-  const orders = getStoredOrders();
-  if (orders.length === 0) return 1;
-  const maxNum = Math.max(...orders.map(o => o.numeroPedido || 0));
+export function getNextOrderNumber(ordersList?: SaleOrder[]): number {
+  const orders = ordersList || getStoredOrders();
+  if (!orders || orders.length === 0) return 1;
+  const maxNum = Math.max(...orders.map(o => Number(o.numeroPedido) || 0));
   return Math.max(1, maxNum + 1);
+}
+
+/**
+ * Consulta los datos existentes en Google Sheets para detectar el número de pedido
+ * más alto registrado entre todos los dispositivos, sumarle 1 en orden consecutivo (1, 2, 3...)
+ * y asegurar que el número esté perfectamente sincronizado a nivel global.
+ */
+export async function fetchGlobalNextOrderNumber(customScriptUrl?: string): Promise<{
+  nextNumber: number;
+  maxFoundInSheets: number;
+  syncedFromSheets: boolean;
+}> {
+  const localOrders = getStoredOrders();
+  const localMax = localOrders.length > 0 
+    ? Math.max(...localOrders.map(o => Number(o.numeroPedido) || 0)) 
+    : 0;
+
+  const url = customScriptUrl || getScriptUrl();
+  if (!url) {
+    return {
+      nextNumber: Math.max(1, localMax + 1),
+      maxFoundInSheets: 0,
+      syncedFromSheets: false
+    };
+  }
+
+  try {
+    const res = await fetchLiveSheetData(url);
+    if (res.success && res.rows) {
+      let sheetsMax = 0;
+      res.rows.forEach(r => {
+        const num = Number(r.Numero_Pedido) || 0;
+        if (num > sheetsMax) sheetsMax = num;
+      });
+
+      // El número más alto absoluto entre Sheets y datos locales
+      const highestNumber = Math.max(localMax, sheetsMax);
+      return {
+        nextNumber: Math.max(1, highestNumber + 1),
+        maxFoundInSheets: sheetsMax,
+        syncedFromSheets: true
+      };
+    }
+  } catch (err) {
+    console.warn('No se pudo consultar el número global en Google Sheets:', err);
+  }
+
+  return {
+    nextNumber: Math.max(1, localMax + 1),
+    maxFoundInSheets: 0,
+    syncedFromSheets: false
+  };
 }
 
 /**
@@ -359,4 +411,32 @@ export async function deleteOrderFromStorageAndSheets(
   }
 
   return { updatedOrders, message, success: true };
+}
+
+/**
+ * Exporta la base de datos completa de pedidos como un archivo JSON de respaldo.
+ * Ideal para guardar una copia de seguridad que se puede archivar o transferir.
+ */
+export function exportOrdersToJSON(orders: SaleOrder[], filename = 'respaldo_pedidos_adara.json'): void {
+  const jsonContent = JSON.stringify(orders, null, 2);
+  const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Borra todos los pedidos almacenados en localStorage (o reinicia el almacenamiento).
+ */
+export function clearAllStoredOrders(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.ORDERS);
+  } catch (err) {
+    console.error('Error al limpiar pedidos de localStorage:', err);
+  }
 }

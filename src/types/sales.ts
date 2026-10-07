@@ -12,7 +12,11 @@ export interface CartItem {
   tamanoTipo: ProductSizePreset;
   cantidad: number;
   precioUnitario: number;
+  descuento?: number; // Descuento opcional en $ aplicado al producto
+  descuentoInput?: string;
   subtotal: number;
+  cantidadInput?: string;
+  precioInput?: string;
 }
 
 export interface SaleOrder {
@@ -21,6 +25,7 @@ export interface SaleOrder {
   cliente: string;
   direccion: string;
   items: CartItem[];
+  descuentoGeneral?: number; // Descuento general en dólares ($) aplicado al total de la venta
   granTotal: number;
   createdAt: string;
   syncedToSheets?: boolean;

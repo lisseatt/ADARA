@@ -16,7 +16,15 @@ import {
   Leaf
 } from 'lucide-react';
 import { SaleOrder } from './types/sales';
-import { getStoredOrders, saveOrdersLocally, getScriptUrl, saveScriptUrl, deleteOrderFromStorageAndSheets } from './services/sheetsService';
+import { 
+  getStoredOrders, 
+  saveOrdersLocally, 
+  getScriptUrl, 
+  saveScriptUrl, 
+  deleteOrderFromStorageAndSheets,
+  fetchGlobalNextOrderNumber,
+  fetchLiveSheetData
+} from './services/sheetsService';
 import { NewSaleForm } from './components/NewSaleForm';
 import { SalesHistory } from './components/SalesHistory';
 import { GoogleSheetsGuide } from './components/GoogleSheetsGuide';
@@ -29,162 +37,222 @@ export default function App() {
   const [scriptUrl, setScriptUrl] = useState<string>('');
   const [receiptOrder, setReceiptOrder] = useState<SaleOrder | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [globalNextOrderNumber, setGlobalNextOrderNumber] = useState<number>(1);
+  const [isSyncingGlobalNumber, setIsSyncingGlobalNumber] = useState<boolean>(false);
 
-  // Cargar pedidos y URL almacenada al iniciar
+  // Cargar pedidos y URL almacenada al iniciar, y sincronizar con Google Sheets
   useEffect(() => {
     const loadedOrders = getStoredOrders();
     setOrders(loadedOrders);
     const loadedUrl = getScriptUrl();
     setScriptUrl(loadedUrl);
+
+    // Calcular inicialmente con datos locales
+    const localMax = loadedOrders.length > 0 
+      ? Math.max(...loadedOrders.map(o => Number(o.numeroPedido) || 0)) 
+      : 0;
+    setGlobalNextOrderNumber(Math.max(1, localMax + 1));
+
+    // Si hay URL de Google Sheets, consultar datos existentes en la nube
+    // para detectar el número más alto registrado y garantizar sincronización global
+    if (loadedUrl) {
+      syncWithGoogleSheets(loadedUrl, loadedOrders);
+    }
   }, []);
 
-  // Calcular el próximo número de pedido secuencial incremental (1, 2, 3...)
+  const syncWithGoogleSheets = async (url: string, currentLocalOrders: SaleOrder[]) => {
+    setIsSyncingGlobalNumber(true);
+    try {
+      const res = await fetchLiveSheetData(url);
+      if (res.success && res.rows) {
+        let maxSheets = 0;
+        const rowsByOrder: Record<number, any[]> = {};
+
+        res.rows.forEach(r => {
+          const num = Number(r.Numero_Pedido) || 0;
+          if (num > maxSheets) maxSheets = num;
+
+          if (num > 0) {
+            if (!rowsByOrder[num]) rowsByOrder[num] = [];
+            rowsByOrder[num].push(r);
+          }
+        });
+
+        // Reconstruir lista consolidada de pedidos si Sheets tiene registros
+        const mergedOrdersMap = new Map<number, SaleOrder>();
+        
+        // Agregar pedidos locales existentes
+        currentLocalOrders.forEach(o => {
+          mergedOrdersMap.set(o.numeroPedido, o);
+        });
+
+        // Complementar con los pedidos descargados de Sheets
+        Object.entries(rowsByOrder).forEach(([numStr, rList]) => {
+          const num = Number(numStr);
+          if (!mergedOrdersMap.has(num)) {
+            const first = rList[0];
+            const items = rList.map((itemRow, idx) => ({
+              id: `sheet-${num}-${idx}`,
+              producto: String(itemRow.Producto || ''),
+              tamano: String(itemRow.Tamaño || '250 ml'),
+              tamanoTipo: '250 ml' as any,
+              cantidad: Number(itemRow.Cantidad) || 1,
+              precioUnitario: Number(itemRow.Precio_Unitario) || 0,
+              subtotal: Number(itemRow.Subtotal) || 0
+            }));
+            const gTotal = Math.round(items.reduce((acc, it) => acc + it.subtotal, 0) * 100) / 100;
+            mergedOrdersMap.set(num, {
+              numeroPedido: num,
+              fecha: String(first.Fecha || ''),
+              cliente: String(first.Cliente || ''),
+              direccion: String(first.Direccion || ''),
+              items,
+              granTotal: gTotal,
+              createdAt: new Date().toISOString(),
+              syncedToSheets: true
+            });
+          }
+        });
+
+        const mergedOrders = Array.from(mergedOrdersMap.values()).sort((a, b) => b.numeroPedido - a.numeroPedido);
+        setOrders(mergedOrders);
+        saveOrdersLocally(mergedOrders);
+
+        const absoluteMax = Math.max(
+          ...mergedOrders.map(o => Number(o.numeroPedido) || 0),
+          maxSheets
+        );
+        const consecutiveNext = Math.max(1, absoluteMax + 1);
+        setGlobalNextOrderNumber(consecutiveNext);
+      }
+    } catch (err) {
+      console.warn('Error al sincronizar número global desde Google Sheets al iniciar:', err);
+    } finally {
+      setIsSyncingGlobalNumber(false);
+    }
+  };
+
+  // Número consecutivo global calculado
   const nextOrderNumber = React.useMemo(() => {
-    if (orders.length === 0) return 1;
-    const maxNum = Math.max(...orders.map(o => o.numeroPedido || 0));
-    return Math.max(1, maxNum + 1);
-  }, [orders]);
+    const localMax = orders.length > 0 
+      ? Math.max(...orders.map(o => Number(o.numeroPedido) || 0)) 
+      : 0;
+    return Math.max(globalNextOrderNumber, localMax + 1);
+  }, [orders, globalNextOrderNumber]);
 
   const handleOrderSaved = (newOrder: SaleOrder) => {
-    const updated = [newOrder, ...orders];
+    const updated = [newOrder, ...orders.filter(o => o.numeroPedido !== newOrder.numeroPedido)];
     setOrders(updated);
     saveOrdersLocally(updated);
-    showToast(`✓ Pedido #${newOrder.numeroPedido} registrado correctamente`);
+
+    // Incrementar de forma consecutiva
+    const nextVal = Math.max(newOrder.numeroPedido + 1, nextOrderNumber + 1);
+    setGlobalNextOrderNumber(nextVal);
+
+    showToast(`✓ ¡Venta del pedido #${newOrder.numeroPedido} guardada con éxito!`);
   };
 
   const handleDeleteOrder = async (orderNumber: number) => {
     const res = await deleteOrderFromStorageAndSheets(orderNumber, scriptUrl);
     setOrders(res.updatedOrders);
-    showToast(`✓ ${res.message}`);
+    showToast(`✓ El pedido #${orderNumber} fue eliminado de tu lista.`);
   };
 
   const handleUrlUpdated = (newUrl: string) => {
     setScriptUrl(newUrl);
     saveScriptUrl(newUrl);
-    showToast(newUrl ? '✓ URL de Google Apps Script actualizada' : 'Modo local activado');
+    showToast(newUrl ? '✓ Enlace de Google Sheets guardado correctamente' : 'Modo sin conexión activado');
+    if (newUrl) {
+      syncWithGoogleSheets(newUrl, orders);
+    }
   };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-[#24201C] flex flex-col antialiased selection:bg-[#D49A2A]/25 selection:text-[#1F1C18]">
+    <div className="min-h-screen bg-[#FDFBF7] text-[#1A1612] flex flex-col antialiased selection:bg-[#D49A2A]/30 selection:text-[#1A1612] min-w-[320px]">
       {/* =========================================================================
-          TOP BAR CONTRACT (Cumplimiento de la Constitución Frontend)
-          Zone 1: Logo Oficial Adara (Ilustración lineal + Dorado cálido)
-          Zone 2: Navegación de pestañas limpias
-          Zone 3: Acción primaria / Estado de Google Sheets
+          ENCABEZADO PRINCIPAL (Optimizado para sol y navegación con una mano)
          ========================================================================= */}
-      <header className="sticky top-0 z-40 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-[#E8DFC8] no-print">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          {/* Zone 1: Logo oficial Adara */}
+      <header className="sticky top-0 z-40 bg-[#FAF7F2] border-b-2 border-[#D8CFC4] shadow-xs no-print">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-2">
+          {/* Logo oficial Adara */}
           <a 
             href="#home" 
             onClick={(e) => { e.preventDefault(); setActiveTab('nueva_venta'); }}
             className="hover:opacity-90 transition-opacity cursor-pointer py-1"
             title="Adara Cosmética Natural"
           >
-            <AdaraLogo variant="horizontal" size={36} />
+            <AdaraLogo variant="horizontal" size={38} />
           </a>
 
-          {/* Zone 2: Navigation Links / Segmented Control */}
-          <nav className="hidden md:flex items-center gap-1 p-1 bg-[#F0EBE1] rounded-xl border border-[#E2D9CC]">
-            <button
-              onClick={() => setActiveTab('nueva_venta')}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer ${
-                activeTab === 'nueva_venta'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Nueva Venta
-            </button>
-
-            <button
-              onClick={() => setActiveTab('historial')}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer ${
-                activeTab === 'historial'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Historial & Filtros ({orders.length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab('google_sheets')}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer ${
-                activeTab === 'google_sheets'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Conectar Google Sheets
-            </button>
-          </nav>
-
-          {/* Zone 3: Primary Action & Sheets Indicator */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab('google_sheets')}
-              className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                scriptUrl
-                  ? 'bg-[#FDF6E9] border-[#EED7B0] text-[#9E6C12]'
-                  : 'bg-amber-50/80 border-amber-300 text-amber-800 hover:bg-amber-100'
-              }`}
-              title={scriptUrl ? 'Sincronizado con Google Sheets' : 'Configura tu script de Google Sheets'}
-            >
-              <span className={`w-2 h-2 rounded-full ${scriptUrl ? 'bg-[#D49A2A]' : 'bg-amber-500 animate-pulse'}`}></span>
-              <span>{scriptUrl ? 'Google Sheets Conectado' : 'Conectar Sheets'}</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('nueva_venta')}
-              className="px-3.5 py-1.5 bg-[#D49A2A] hover:bg-[#BD851D] text-white font-semibold text-xs rounded-lg shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>+ Venta</span>
-            </button>
-          </div>
+          {/* Estado de conexión con Google Sheets (Texto de 16px, alto contraste) */}
+          <button
+            onClick={() => setActiveTab('google_sheets')}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-base font-bold border-2 transition-colors cursor-pointer ${
+              scriptUrl
+                ? 'bg-[#FAF5EC] border-[#B8801A] text-[#1A1612]'
+                : 'bg-amber-100/70 border-amber-500 text-[#1A1612] hover:bg-amber-200'
+            }`}
+            title={scriptUrl ? 'Sincronizado con Google Sheets' : 'Configura tu hoja de cálculo'}
+          >
+            <span className={`w-3 h-3 rounded-full ${scriptUrl ? 'bg-[#15803D]' : 'bg-amber-600 animate-pulse'}`}></span>
+            <span>{scriptUrl ? 'Hoja Conectada' : 'Conectar Hoja'}</span>
+          </button>
         </div>
 
-        {/* Barra de navegación inferior móvil */}
-        <div className="md:hidden flex items-center justify-around border-t border-[#E8DFC8] bg-[#FAF5EB] px-2 py-1.5 text-[11px] font-medium">
+        {/* Barra de pestañas táctil: Botones amplios para el pulgar, texto de 16px */}
+        <nav className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 py-1.5 flex items-center justify-between gap-1.5 overflow-x-auto border-t border-[#E8DFC8] bg-[#F4EFE6]">
           <button
             onClick={() => setActiveTab('nueva_venta')}
-            className={`py-1 px-2.5 rounded-md ${activeTab === 'nueva_venta' ? 'bg-white text-slate-900 font-bold shadow-2xs' : 'text-slate-600'}`}
+            className={`flex-1 min-h-[48px] px-3 py-2.5 text-base font-bold rounded-xl transition-all text-center cursor-pointer ${
+              activeTab === 'nueva_venta'
+                ? 'bg-[#1A1612] text-white shadow-sm'
+                : 'text-[#1A1612] hover:bg-[#EAE2D5] border border-transparent'
+            }`}
           >
             Registrar Venta
           </button>
+
           <button
             onClick={() => setActiveTab('historial')}
-            className={`py-1 px-2.5 rounded-md ${activeTab === 'historial' ? 'bg-white text-slate-900 font-bold shadow-2xs' : 'text-slate-600'}`}
+            className={`flex-1 min-h-[48px] px-3 py-2.5 text-base font-bold rounded-xl transition-all text-center cursor-pointer ${
+              activeTab === 'historial'
+                ? 'bg-[#1A1612] text-white shadow-sm'
+                : 'text-[#1A1612] hover:bg-[#EAE2D5] border border-transparent'
+            }`}
           >
             Historial ({orders.length})
           </button>
+
           <button
             onClick={() => setActiveTab('google_sheets')}
-            className={`py-1 px-2.5 rounded-md ${activeTab === 'google_sheets' ? 'bg-white text-slate-900 font-bold shadow-2xs' : 'text-slate-600'}`}
+            className={`flex-1 min-h-[48px] px-3 py-2.5 text-base font-bold rounded-xl transition-all text-center cursor-pointer ${
+              activeTab === 'google_sheets'
+                ? 'bg-[#1A1612] text-white shadow-sm'
+                : 'text-[#1A1612] hover:bg-[#EAE2D5] border border-transparent'
+            }`}
           >
             Google Sheets
           </button>
-        </div>
+        </nav>
       </header>
 
-      {/* Toast Notification */}
+      {/* Mensaje flotante de confirmación (Toast): 16px, alto contraste */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#1E1B18] text-white text-xs font-semibold px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 animate-in slide-in-from-bottom-2 duration-200 border border-[#D49A2A]/40">
-          <CheckCircle className="w-4 h-4 text-[#E5A825] shrink-0" />
-          <span>{toastMessage}</span>
+        <div className="fixed bottom-6 left-4 right-4 sm:left-auto sm:right-6 z-50 bg-[#1A1612] text-white text-base font-bold p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-2 duration-200 border-2 border-[#D49A2A]">
+          <CheckCircle className="w-6 h-6 text-[#F5C242] shrink-0" />
+          <span className="leading-snug">{toastMessage}</span>
         </div>
       )}
 
       {/* =========================================================================
           CONTENIDO PRINCIPAL
          ========================================================================= */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 md:py-8">
         {activeTab === 'nueva_venta' && (
           <NewSaleForm
             nextOrderNumber={nextOrderNumber}
@@ -201,6 +269,7 @@ export default function App() {
             onRefreshData={() => setOrders(getStoredOrders())}
             onViewReceipt={order => setReceiptOrder(order)}
             onDeleteOrder={handleDeleteOrder}
+            onGoToNewSale={() => setActiveTab('nueva_venta')}
           />
         )}
 
@@ -218,18 +287,18 @@ export default function App() {
         onClose={() => setReceiptOrder(null)}
       />
 
-      {/* Footer Minimalista (Cumplimiento de la Constitución de Diseño) */}
-      <footer className="mt-auto border-t border-[#E8DFC8] py-6 text-xs text-slate-500 bg-[#FAF7F2] no-print">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+      {/* Pie de página con alto contraste y texto de 16px */}
+      <footer className="mt-auto border-t-2 border-[#D8CFC4] py-6 text-base font-medium text-[#1A1612] bg-[#FAF7F2] no-print">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
           <div className="flex items-center gap-2.5">
-            <AdaraLogo variant="symbol" size={22} />
-            <span className="font-semibold text-slate-800">Adara Cosmética Natural</span>
-            <span>·</span>
-            <span>Registro de Ventas & Control de Pedidos</span>
+            <AdaraLogo variant="symbol" size={26} />
+            <span className="font-bold text-[#1A1612]">Adara Cosmética Natural</span>
+            <span className="text-[#5C4A3A]">·</span>
+            <span>Control de Ventas y Pedidos</span>
           </div>
 
-          <div className="flex items-center gap-4 text-[11px] text-slate-400">
-            <span>Columnas Fila 1: Numero_Pedido | Fecha | Cliente | Direccion | Producto | Tamaño | Cantidad | Precio_Unitario | Subtotal</span>
+          <div className="text-base font-medium text-[#4A3D30]">
+            Columnas en Sheets: Pedido · Fecha · Cliente · Dirección · Producto · Tamaño · Cantidad · Precio · Subtotal
           </div>
         </div>
       </footer>
